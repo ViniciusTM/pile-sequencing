@@ -9,6 +9,7 @@ include("src/data.jl")
 include("src/variables.jl")
 include("src/pile_lifecycle.jl")
 include("src/material_flow.jl")
+include("src/quality.jl")
 include("src/objective.jl")
 include("src/model.jl")
 

@@ -1,7 +1,7 @@
 function add_variables!(model::Model, data::Data)
 
-    @unpack s_piles, s_lines, s_line_positions, s_positions, s_periods, s_trains, s_train_window = data
-    @unpack m_train = data
+    @unpack s_compounds, s_piles, s_lines, s_line_positions, s_positions, s_periods, s_trains, s_train_window = data
+    @unpack m_train, p_local_quality, p_train_quality = data
 
     # --- Material flow to pile
 
@@ -64,6 +64,17 @@ function add_variables!(model::Model, data::Data)
     )
     @expression(model, B_PILE_UNFINISHED[ps in s_positions, p in s_piles[ps]], 
         B_PILE_BUILDING[ps,p,s_periods[end]] + B_PILE_START_RECLAIMING[ps,p,s_periods[end]] + B_PILE_CONTINUE_RECLAIMING[ps,p,s_periods[end]]
+    )
+
+    # --- Pile quality
+
+    @expression(model, M_COMP_TO_PILE[ps in s_positions, p in s_piles[ps], q in s_compounds, t in s_periods],
+        (M_LOCAL_TO_PILE[ps,p,t] * p_local_quality[q,t]/100) 
+        + sum(B_TRAIN_TO_PILE[i,ps,p,t] * m_train[i] * p_train_quality[i,q]/100 for i in s_trains if t in s_train_window[i])
+    )
+
+    @expression(model, M_COMP_PILE[ps in s_positions, p in s_piles[ps], q in s_compounds],
+        sum(M_COMP_TO_PILE[ps,p,q,t] for t in s_periods)
     )
 
 end

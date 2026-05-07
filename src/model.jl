@@ -4,6 +4,7 @@ function build_model(data::Data)::Model
     add_variables!(model, data)
     add_pile_lifecycle_constraints!(model, data)
     add_material_flow_constraints!(model, data)
+    add_quality_constraints!(model,data)
     add_objective!(model)
     
     return model
@@ -87,4 +88,23 @@ function check_solution(model::Model, data::Data)
             end
         end
     end
+
+    
+    # for (ps,p,q) in eachindex(model[:M_COMP_PILE])
+    #     println("$ps, $p, $q", ": ")
+
+    #     m_comp = round(value(model[:M_COMP_PILE][ps,p,q]), digits=3)
+    #     m_pile = round(value(model[:M_PILE_INPUT][ps,p]), digits=3)
+    #     p_min = round(data.p_line_quality_min[data.k_position_line[ps],q], digits=3)
+    #     p_max = round(data.p_line_quality_max[data.k_position_line[ps],q], digits=3)
+        
+    #     println("$m_comp >= $m_pile * $p_min%")
+    #     println("$m_comp >= $(m_pile*p_min/100)")
+
+    #     println("$m_comp <= $m_pile * $p_max%")
+    #     println("$m_comp <= $(m_pile*p_max/100)")
+    #     println("-------------------------")
+
+    # end
+
 end
