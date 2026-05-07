@@ -1,6 +1,6 @@
-function add_pile_lifecycle_constraints!(model::Model, data::Data, s_piles::Dict{Symbol,Vector{Symbol}})
-    s_positions = data.s_positions
-    s_periods = 1:data.n_periods
+function add_pile_lifecycle_constraints!(model::Model, data::Data)
+    
+    @unpack s_piles, s_positions, s_periods = data
 
     B_PILE_EMPTY = model[:B_PILE_EMPTY]
     B_PILE_BUILDING = model[:B_PILE_BUILDING]

@@ -1,9 +1,8 @@
-function add_variables!(model::Model, data::Data, s_piles::Dict{Symbol,Vector{Symbol}})
-    s_positions = data.s_positions
-    s_periods = 1:data.n_periods
-    s_trains = 1:data.n_trains
-    s_train_window = Dict(i => data.t_train_window_start[i]:data.t_train_window_end[i] for i in s_trains)
-   
+function add_variables!(model::Model, data::Data)
+
+    @unpack s_piles, s_lines, s_line_positions, s_positions, s_periods, s_trains, s_train_window = data
+    @unpack m_train = data
+
     # --- Material flow to pile
 
     # Local
@@ -15,7 +14,7 @@ function add_variables!(model::Model, data::Data, s_piles::Dict{Symbol,Vector{Sy
         sum(B_TRAIN_TO_PILE[i,ps,p,t] for i in s_trains if t in s_train_window[i])
     )
     @expression(model, M_TRAIN_TO_PILE[ps in s_positions, p in s_piles[ps], t in s_periods], 
-        sum(B_TRAIN_TO_PILE[i,ps,p,t] * data.m_train[i] for i in s_trains if t in s_train_window[i])
+        sum(B_TRAIN_TO_PILE[i,ps,p,t] * m_train[i] for i in s_trains if t in s_train_window[i])
     )
 
     # Total
@@ -30,12 +29,18 @@ function add_variables!(model::Model, data::Data, s_piles::Dict{Symbol,Vector{Sy
 
     @variable(model, M_PILE_TO_LINE[ps in s_positions, p in s_piles[ps], t in s_periods] >= 0)
     
-    @expression(model, M_TO_LINE[t in s_periods],
-        sum(M_PILE_TO_LINE[ps,p,t] for ps in s_positions, p in s_piles[ps])
+    @expression(model, M_TO_LINE[d in s_lines, t in s_periods],
+        sum(M_PILE_TO_LINE[ps,p,t] for ps in s_line_positions[d], p in s_piles[ps])
     )
     
     @expression(model, M_PILE_OUTPUT[ps in s_positions, p in s_piles[ps]], 
         sum(M_PILE_TO_LINE[ps,p,t] for t in s_periods)
+    )
+
+    # --- Mass balance in pile
+
+    @expression(model, M_IN_PILE[ps in s_positions, p in s_piles[ps], t in s_periods],
+        sum(M_TO_PILE[ps,p,t2] for t2 in s_periods[1:t]) - sum(M_PILE_TO_LINE[ps,p,t2] for t2 in s_periods[1:t])
     )
 
     # --- Pile state

@@ -1,69 +1,90 @@
 
-
-function generate_piles_for_position(data::Data, position::Symbol)::Vector{Symbol}
-    position_input_capacity = data.m_input_capacity[position]
-    positions_min_size = data.m_position_min[position]
+function build_model(data::Data)::Model
+    model = Model(HiGHS.Optimizer)
+    add_variables!(model, data)
+    add_pile_lifecycle_constraints!(model, data)
+    add_material_flow_constraints!(model, data)
+    add_objective!(model)
     
-    # Para upper bound: assume que esta posição poderia receber todo o pool
-    # de trens. Não cortar solução factível é mais importante que apertar o bound.
-    train_arrival_left = sum(data.m_train)
+    return model
+end
 
-    set_position_piles = [:P1]
+function solve!(model::Model, data::Data)
+    optimize!(model)
+    
+    println("Status: ", termination_status(model))
+    if has_values(model)
+        println("FO: ", value(objective_function(model)))
+        check_solution(model, data)
+    end
 
-    pile_mass = 0.0
-    is_building = true
-    for t in 1:data.n_periods
-        if is_building
-            road_input = min(position_input_capacity, data.m_local_arrival[t])
+end
+
+function check_solution(model::Model, data::Data)
+    
+    println()
+    println("-"^30)
+    println()
+    println("Position | Pile | Day: 1  2  3  4  5  6  7  8  9  10 11 12 13 14")
+    for ps in data.s_positions, p in data.s_piles[ps]
+        print("$(rpad(String(ps), 8)) | $(rpad(String(p), 4)) |      ")
+        for t in data.s_periods
             
-            train_input = min(position_input_capacity - road_input, train_arrival_left)
-            train_arrival_left -= train_input
-            
-            total_input = road_input + train_input
-            
-            pile_mass += total_input
-            if pile_mass >= positions_min_size
-                pile_mass = positions_min_size # trunca no piso para gerar upper bound de pilhas
-                is_building = false
+            if value(model[:B_PILE_BUILDING][ps,p,t]) ≈ 1
+                status = "B"
+            elseif value(model[:B_PILE_RECLAIMING][ps,p,t]) ≈ 1
+                status = "R"
+            else
+                status = "."
             end
-        else
-            pile_mass -= data.m_line_demand[t]
-            if pile_mass <= 0
-                pile_mass = 0
-                is_building = true
-                name = Symbol("P$(length(set_position_piles)+1)")
-                push!(set_position_piles, name)
+            print(rpad(status,3))
+        end
+        println()
+    end
+    println()
+    println("-"^30) 
+    println()
+    println("Periods:  1   |   2    |   3    |   4    |   5    |   6    |   7    |   8    |   9    |   10   |   11   |   12   |   13   |   14   ")
+    println("----------------------------------------------------------------------------------------------------------------------------------")
+    for ps in data.s_positions
+        print(rpad(String(ps),5), ": ")
+        for t in data.s_periods
+            @printf("% 6.2f | ", sum(value(model[:M_IN_PILE][ps,p,t]) for p in data.s_piles[ps]))
+        end
+        print("\n---")
+        print("\nLOCAL: ")
+        for t in data.s_periods
+            @printf("% 6.2f | ", sum(value(model[:M_LOCAL_TO_PILE][ps,p,t]) for p in data.s_piles[ps]))
+        end
+        print("\nRAIL : ")
+        for t in data.s_periods
+            @printf("% 6.2f | ", sum(value(model[:M_TRAIN_TO_PILE][ps,p,t]) for p in data.s_piles[ps]))
+        end
+        print("\n---")
+        print("\nIN   : ")
+        for t in data.s_periods
+            @printf("% 6.2f | ", sum(value(model[:M_TO_PILE][ps,p,t]) for p in data.s_piles[ps]))
+        end
+        print("\nOUT  : ")
+        for t in data.s_periods
+            @printf("% 6.2f | ", sum(value(model[:M_PILE_TO_LINE][ps,p,t]) for p in data.s_piles[ps]))
+        end
+        println("\n--------------------------------------------------------------------")
+    end
+    print("\nLOCAL: ")
+    for t in data.s_periods
+        @printf("% 6.2f | ", sum(value(model[:M_LOCAL_TO_PILE][ps,p,t]) for ps in data.s_positions for p in data.s_piles[ps]))
+    end
+
+
+    println()
+    println("-"^30)
+    println()
+    for i in data.s_trains
+        for (ps,p,t) in eachindex((model[:B_TRAIN_TO_PILE][i,:,:,:]))
+            if value.(model[:B_TRAIN_TO_PILE][i,ps,p,t]) ≈ 1
+                println("Train $i | Day $t | $ps | $p")
             end
         end
     end
-    
-    return set_position_piles
-end
-
-function generate_piles(data::Data)::Dict{Symbol,Vector{Symbol}}
-    set_position_piles = Dict{Symbol,Vector{Symbol}}()
-    for position in data.s_positions
-        position_piles = generate_piles_for_position(data, position)
-        set_position_piles[position] = position_piles
-    end
-    return set_position_piles
-end
-
-function solve!(model::Model)
-    optimize!(model)
-    println("Status: ", termination_status(model))
-    println("Contagem de resultados: ", result_count(model))
-    println("FO: ", value(objective_function(model)))
-end
-
-function build_model(data::Data)::Model
-    s_piles = generate_piles(data)
-
-    model = Model(HiGHS.Optimizer)
-    add_variables!(model, data, s_piles)
-    add_pile_lifecycle_constraints!(model, data, s_piles)
-    add_material_flow_constraints!(model, data, s_piles)
-    add_objective!(model, data, s_piles)
-    
-    return model
 end

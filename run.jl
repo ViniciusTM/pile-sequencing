@@ -1,5 +1,8 @@
 using JuMP
 using HiGHS
+using Parameters
+
+using Printf
 
 include("src/data.jl")
 
@@ -13,5 +16,5 @@ include("instances/toy_instance.jl")
 
 data = toy_instance()
 model = build_model(data)
-solve!(model)
+solve!(model, data)
 
