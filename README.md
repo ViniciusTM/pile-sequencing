@@ -1,155 +1,87 @@
 # Stockpile Sequencing for a Pellet Plant Blending Yard
 
-## 1. Context
+> **Work in Progress** — This is an active research project. The model is functional but under development.
 
-A coastal pelletizing complex processes iron ore *pellet feed* from
-multiple sources into iron ore pellets for the steelmaking market. The
-complex runs dedicated lines for two distinct products: blast furnace
-pellets (BF) and direct reduction pellets (DR), each with its own
-chemical specification window — the DR window being significantly
-tighter.
+A mixed-integer linear programming (MILP) model for tactical planning of stockpile sequencing in an iron ore pelletizing complex.
 
-Before pelletizing, the feed goes through a **blending yard**, where
-material is deposited into **longitudinal stockpiles** that act both as
-buffer storage and as a chemical homogenization mechanism. Each pile
-is built up over a few days, rests for quality assay, and is then
-reclaimed and sent to its corresponding pelletizing line.
+## Overview
 
-## 2. The planning decision
+A coastal pelletizing complex processes iron ore pellet feed from multiple sources into pellets for the steelmaking market. Before pelletizing, material goes through a **blending yard** where it is deposited into longitudinal stockpiles that act as buffer storage and chemical homogenization.
 
-At each planning cycle (typically one month), the operations team must
-answer, at daily granularity:
+This model solves the **tactical planning problem**: given a horizon (typically one month), determine:
+- When and where to build each stockpile
+- How to blend material from different sources into each pile
+- When to reclaim each pile to feed the pelletizing lines
+- When each train should arrive
 
-- **In which yard position will each pile be built, and when?**
-- **What blend of products will compose each pile, and in what
-  proportions?**
-- **When will each pile be consumed, and by which pelletizing line?**
-- **On which day should each train of the horizon arrive?**
+The solution must respect physical infrastructure limits, daily line demands, chemical specification windows, and operational rules governing the pile lifecycle.
 
-These decisions must respect the physical infrastructure, the daily
-line demand, the chemical specification windows of each product, and
-operational rules governing how a pile is built and consumed.
+## Quick Start
 
-## 3. Physical layout
+### Prerequisites
+- Julia 1.9 or later
 
-### 3.1 Yards and positions
+### Installation
 
-The complex has three blending yards. Each yard is divided into
-**positions**, the physical locations where a pile can be built by a
-*stacker* and reclaimed by a *reclaimer*. There are around a dozen
-positions distributed across the yards.
+```bash
+git clone https://github.com/your-username/pile-sequencing.git
+cd pile-sequencing
+julia --project -e 'using Pkg; Pkg.instantiate()'
+```
 
-Yards are physical areas, not extensions of a single line: positions
-within the same yard may feed different pelletizing lines depending on
-the conveyor topology of the complex.
+### Running
 
-Each position:
+```bash
+julia --project run.jl
+```
 
-- Holds at most one pile at a time.
-- Has a maximum capacity and an operational floor (the minimum mass
-  below which a pile is not considered usable).
-- Is physically connected to **a single pelletizing line**, which
-  determines the quality window applicable to piles built there.
+This runs the toy instance and prints the solution.
 
-### 3.2 Pelletizing lines
+## Documentation
 
-Three lines consume material from the yard: two dedicated to BF and
-one dedicated to DR. Each line has a **firm daily demand** that must
-be met without fail — interrupting a pelletizing line carries
-significant operational cost and disrupts contracted production.
+- [Problem Description](docs/problem.md) — Full context, physical layout, and business rules
+- [Mathematical Formulation](docs/formulation.md) — Sets, variables, constraints, and objective
+- [Creating Instances](docs/instances.md) — How to define new problem instances
 
-### 3.3 Sources and inbound modes
+## Project Structure
 
-Material reaches the yard through two modes with very different
-characteristics:
+```
+pile-sequencing/
+├── run.jl                    # Entry point
+├── src/
+│   ├── data.jl               # Data structures
+│   ├── variables.jl          # Decision variables and expressions
+│   ├── pile_lifecycle.jl     # State machine constraints
+│   ├── material_flow.jl      # Flow conservation and capacity
+│   ├── quality.jl            # Chemical specification constraints
+│   ├── objective.jl          # Objective function
+│   └── model.jl              # Model builder and solver
+└── instances/
+    └── toy_instance.jl       # Example instance
+```
 
-- **Local concentrator (slurry pipeline / conveyor):** continuous
-  flow from the company's own concentration plant. Daily mass and
-  chemical quality arrive as **input parameters** of the problem,
-  varying along the horizon as a reflection of operational reality
-  (planned maintenance, evolving mining fronts, throughput
-  fluctuations). The pellet plant adapts to what the concentrator
-  delivers; it is not a planning decision.
+## Dependencies
 
-- **Trains (rail corridor from remote mines):** **discrete,
-  indivisible** arrivals. The horizon includes a fixed set of trains,
-  each carrying cargo from a specific source (mine A, mine B, ...)
-  with fixed mass and a quality assay certified per train. The full
-  payload of a train must go to a single position — quality
-  traceability prevents splitting a train across destinations. Daily
-  rail unloading capacity is bounded by the car-dumper throughput.
+- [JuMP](https://jump.dev/) — Mathematical optimization modeling
+- [HiGHS](https://highs.dev/) — Open-source MILP solver
+- [Parameters.jl](https://github.com/mauro3/Parameters.jl) — Struct utilities
 
-The **chemical quality** (Fe, SiO₂, Al₂O₃, P) of every arrival is an
-**input parameter**:
+## Roadmap
 
-- For the concentrator, quality varies day by day along the horizon.
-- For each train, quality comes from the loading assay.
+**Model enhancements:**
+- [ ] Sub-day transitions (quality assay ~6-12h, setup time ~6-12h, same-day phase changes with reduced capacity)
+- [ ] Line-level safety stock constraints
+- [ ] Shared equipment capacity constraints (stacker/reclaimer per yard)
+- [ ] Cost-based objective function
 
-The chemical decision in this problem lies in **how to combine these
-arrivals into piles**, not in what arrives.
+**Infrastructure:**
+- [ ] Test with larger, realistic instances
+- [ ] Computational experiments and analysis
+- [ ] Input data from files (JSON/CSV)
+- [ ] Solution export to standard formats
 
-## 4. Pile life cycle
+*This research may evolve into an academic paper.*
 
-A pile goes through three well-defined phases, always in this order:
+## License
 
-1. **Building.** Over the course of several days, material is
-   deposited into the position (from the concentrator and/or from
-   trains) until it reaches the target mass. While building, no line
-   reclaims from it.
-2. **Ready.** The pile is fully formed, has cleared quality assay,
-   and is awaiting consumption. It may stay in this state for one or
-   more days.
-3. **Reclaiming.** The corresponding pelletizing line draws material
-   at a rate dictated by its daily demand, until the pile is fully
-   depleted. While being reclaimed, **no new material enters** the
-   position.
-
-Several rules follow from this structure:
-
-- **No preemption.** A reclaim is not interrupted to be resumed
-  later, and no further material is sent to a position that is already
-  being reclaimed. A pile is built, sits ready, gets consumed, and
-  only then is the position free again.
-- **Minimum mass to start reclaiming.** A pile cannot start being
-  consumed before reaching the operational floor.
-- **Reclaim empties the position.** When the line finishes consuming
-  a pile, the position must reach zero mass before another pile can
-  be built there.
-- **A line reclaims from one pile at a time.** The single exception is
-  the transition day: when a pile runs out mid-day, the line may
-  start reclaiming from another ready pile in a different position
-  connected to the same line, in order to meet that day's demand.
-
-## 5. Quality and operational constraints
-
-In addition to the physical and life-cycle rules above:
-
-- **Per-pile quality window.** The resulting chemical composition of
-  each pile (mass-weighted average of the qualities of the arrivals
-  that built it) must fall within the window of the product fed by
-  the downstream line. DR windows are significantly tighter than BF
-  windows, particularly on minimum Fe and maximum SiO₂+Al₂O₃.
-- **Daily demand per line.** The mass delivered to each line per day
-  must match the planned demand exactly — no shortfall, no surplus.
-- **Yard safety stock.** The total mass stored in each yard (summed
-  across all piles) must stay within a minimum-maximum band,
-  providing robustness against disruptions without exceeding physical
-  space. Because yards aggregate positions feeding different lines,
-  this constraint couples decisions that would otherwise be
-  independent.
-
-## 6. What counts as a solution
-
-A solution to the problem specifies, for each day of the horizon:
-
-- Which trains arrived that day.
-- How much of each arrival (concentrator and trains) was directed to
-  each position.
-- The state of each position that day (building, ready, or
-  reclaiming).
-- How much each position delivered to its line.
-
-And it does so **feasibly** — respecting all the physical, life-cycle,
-operational and quality rules above. Once a feasible solution is
-found, it is considered satisfactory; in this stage, the problem does
-not seek to optimize cost, fine quality, or any other metric.
+MIT License — see [LICENSE](LICENSE) file.

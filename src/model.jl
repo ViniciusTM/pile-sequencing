@@ -16,12 +16,12 @@ function solve!(model::Model, data::Data)
     println("Status: ", termination_status(model))
     if has_values(model)
         println("FO: ", value(objective_function(model)))
-        check_solution(model, data)
+        print_solution(model, data)
     end
 
 end
 
-function check_solution(model::Model, data::Data)
+function print_solution(model::Model, data::Data)
     
     println()
     println("-"^30)
