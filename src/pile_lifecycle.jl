@@ -4,48 +4,58 @@ function add_pile_lifecycle_constraints!(model::Model, data::Data)
 
     B_PILE_EMPTY = model[:B_PILE_EMPTY]
     B_PILE_BUILDING = model[:B_PILE_BUILDING]
-    B_PILE_START_RECLAIMING = model[:B_PILE_START_RECLAIMING]
-    B_PILE_CONTINUE_RECLAIMING = model[:B_PILE_CONTINUE_RECLAIMING]
-    B_PILE_END_RECLAIMING = model[:B_PILE_END_RECLAIMING]
+    B_PILE_END_BUILDING = model[:B_PILE_END_BUILDING]
     B_PILE_RECLAIMING = model[:B_PILE_RECLAIMING]
+    B_PILE_END_RECLAIMING = model[:B_PILE_END_RECLAIMING]
     B_PILE_DONE = model[:B_PILE_DONE]
 
-    # Piles can only be on one state at a time
+    # With exeption of END_BUILDING, a pile can only be in one state at a time
     @constraint(model, [ps in s_positions, p in s_piles[ps], t in s_periods], 
-        B_PILE_EMPTY[ps,p,t] + B_PILE_BUILDING[ps,p,t] + B_PILE_RECLAIMING[ps,p,t] + B_PILE_DONE[ps,p,t] == 1
+        + B_PILE_EMPTY[ps,p,t] 
+        + B_PILE_BUILDING[ps,p,t]
+        + B_PILE_RECLAIMING[ps,p,t] 
+        + B_PILE_END_RECLAIMING[ps,p,t]
+        + B_PILE_DONE[ps,p,t] == 1
     )
+    @constraint(model, [ps in s_positions, p in s_piles[ps], t in s_periods], 
+        B_PILE_BUILDING[ps,p,t] + B_PILE_END_BUILDING[ps,p,t] <= 1
+    )
+
 
     # Initial state can only be EMPTY || BUILDING
     @constraint(model, [ps in s_positions, p in s_piles[ps]], 
         B_PILE_EMPTY[ps,p,1] + B_PILE_BUILDING[ps,p,1] == 1
     )
+    @constraint(model, [ps in s_positions, p in s_piles[ps]], 
+        B_PILE_END_BUILDING[ps,p,1] == 0
+    )
 
-    # Piles cannot become EMPTY and stay EMPTY
+    # Piles can stay EMPTY, but cannot become EMPTY
     @constraint(model, [ps in s_positions, p in s_piles[ps], t in s_periods[2:end]],
         B_PILE_EMPTY[ps,p,t] <= B_PILE_EMPTY[ps,p,t-1]
     )
 
-    # Piles can become BUILDING from EMPTY and stay EMPTY
+    # Piles can stay BUILDING, or become BUILDING from EMPTY
     @constraint(model, [ps in s_positions, p in s_piles[ps], t in s_periods[2:end]],
         B_PILE_BUILDING[ps,p,t] <= B_PILE_BUILDING[ps,p,t-1] + B_PILE_EMPTY[ps,p,t-1]
     )
-
-    # Piles can become START_RECLAIMING from BUILDING, but cannot stay START_RECLAIMING
+    
+    # Pile cannot stay BUILDING_END, but can become BUILDING_END from BUILDING
     @constraint(model, [ps in s_positions, p in s_piles[ps], t in s_periods[2:end]],
-        B_PILE_START_RECLAIMING[ps,p,t] <= B_PILE_BUILDING[ps,p,t-1]
+        B_PILE_END_BUILDING[ps,p,t] <= B_PILE_BUILDING[ps,p,t-1]
     )
 
-    # Piles can become CONTINUE_RECLAIMING from START_RECLAIMING, and stay CONTINUE_RECLAIMING
+    # Piles stay RECLAIMING, or become RECLAIMING after or while on END_BUILDING
     @constraint(model, [ps in s_positions, p in s_piles[ps], t in s_periods[2:end]],
-        B_PILE_CONTINUE_RECLAIMING[ps,p,t] <= B_PILE_START_RECLAIMING[ps,p,t-1] + B_PILE_CONTINUE_RECLAIMING[ps,p,t-1]
+        B_PILE_RECLAIMING[ps,p,t] <= B_PILE_RECLAIMING[ps,p,t-1] + B_PILE_END_BUILDING[ps,p,t-1] + B_PILE_END_BUILDING[ps,p,t]
     )
 
-    # Piles can become END_RECLAIMING from CONTINUE_RECLAIMING || START_RECLAIMING, but cannot stay END_RECLAIMING
+    # Piles cannot stay END_RECLAIMING, but can become END_RECLAIMING from RECLAIMING
     @constraint(model, [ps in s_positions, p in s_piles[ps], t in s_periods[2:end]],
-        B_PILE_END_RECLAIMING[ps,p,t] <= B_PILE_CONTINUE_RECLAIMING[ps,p,t-1] + B_PILE_START_RECLAIMING[ps,p,t-1]
+        B_PILE_END_RECLAIMING[ps,p,t] <= B_PILE_RECLAIMING[ps,p,t-1] + B_PILE_END_BUILDING[ps,p,t-1]
     )
 
-    # Piles can become DONE from END_RECLAIMING and stay DONE
+    # Piles can stay DONE, or become DONE from END_RECLAIMING
     @constraint(model, [ps in s_positions, p in s_piles[ps], t in s_periods[2:end]],
         B_PILE_DONE[ps,p,t] <= B_PILE_DONE[ps,p,t-1] + B_PILE_END_RECLAIMING[ps,p,t-1]
     )

@@ -5,6 +5,7 @@ function build_model(data::Data)::Model
     add_pile_lifecycle_constraints!(model, data)
     add_material_flow_constraints!(model, data)
     add_quality_constraints!(model,data)
+    add_timing_constraints!(model,data)
     add_objective!(model)
     
     return model
@@ -13,7 +14,7 @@ end
 function solve!(model::Model, data::Data)
     optimize!(model)
     
-    println("Status: ", termination_status(model))
+    println("\nStatus: ", termination_status(model))
     if has_values(model)
         println("FO: ", value(objective_function(model)))
         print_solution(model, data)
@@ -30,13 +31,18 @@ function print_solution(model::Model, data::Data)
     for ps in data.s_positions, p in data.s_piles[ps]
         print("$(rpad(String(ps), 8)) | $(rpad(String(p), 4)) |      ")
         for t in data.s_periods
-            
-            if value(model[:B_PILE_BUILDING][ps,p,t]) ≈ 1
-                status = "B"
-            elseif value(model[:B_PILE_RECLAIMING][ps,p,t]) ≈ 1
-                status = "R"
+            b = value(model[:B_PILE_BUILDING][ps,p,t]) ≈ 1
+            r = (value(model[:B_PILE_RECLAIMING][ps,p,t]) + value(model[:B_PILE_END_RECLAIMING][ps,p,t])) ≈ 1
+            br = value(model[:B_PILE_END_BUILDING][ps,p,t]) ≈ 1
+
+            if br
+                status = "BR"
+            elseif b
+                status = "B "
+            elseif r
+                status = "R "
             else
-                status = "."
+                status = ". "
             end
             print(rpad(status,3))
         end

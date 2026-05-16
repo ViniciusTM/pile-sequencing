@@ -9,6 +9,7 @@
     m_position_min::Dict{Symbol,Float64} # ∀ ps in s_positions
     m_position_max::Dict{Symbol,Float64} # ∀ ps in s_positions
     m_input_capacity::Dict{Symbol,Float64}  # ∀ ps in s_positions
+    d_setup_to_recaiming::Dict{Symbol,Int}  # ∀ ps in s_positions
 
     # Demand
     s_lines::Vector{Symbol}

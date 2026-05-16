@@ -8,16 +8,16 @@ function add_material_flow_constraints!(model::Model, data::Data)
     M_PILE_TO_LINE = model[:M_PILE_TO_LINE]
     M_PILE_INPUT = model[:M_PILE_INPUT]
     M_TO_LINE = model[:M_TO_LINE]
-    B_PILE_BUILDING = model[:B_PILE_BUILDING]
-    B_PILE_RECLAIMING = model[:B_PILE_RECLAIMING]
+    B_PILE_ALL_BUILDING = model[:B_PILE_ALL_BUILDING]
+    B_PILE_ALL_RECLAIMING = model[:B_PILE_ALL_RECLAIMING]
     B_PILE_USED = model[:B_PILE_USED]
-    B_PILE_CONTINUE_RECLAIMING = model[:B_PILE_CONTINUE_RECLAIMING]
+    B_PILE_RECLAIMING = model[:B_PILE_RECLAIMING]
     B_PILE_END_RECLAIMING = model[:B_PILE_END_RECLAIMING]
-    B_PILE_START_RECLAIMING = model[:B_PILE_START_RECLAIMING]
     M_PILE_OUTPUT = model[:M_PILE_OUTPUT]
     B_PILE_UNFINISHED = model[:B_PILE_UNFINISHED]
     M_TO_PILE = model[:M_TO_PILE]
     M_LOCAL_TO_PILE = model[:M_LOCAL_TO_PILE]
+    M_IN_PILE = model[:M_IN_PILE]
 
 
     # ------ Local arrival
@@ -43,13 +43,12 @@ function add_material_flow_constraints!(model::Model, data::Data)
 
     # Pile can receive mass only BUILDING
     @constraint(model, [ps in s_positions, p in s_piles[ps], t in s_periods],
-        M_TO_PILE[ps,p,t] <= m_input_capacity[ps] * B_PILE_BUILDING[ps,p,t]
+        M_TO_PILE[ps,p,t] <= B_PILE_ALL_BUILDING[ps,p,t] * m_input_capacity[ps]
     )
-
 
     # Pile can feed line only RECLAIMING
     @constraint(model, [ps in s_positions, p in s_piles[ps], t in s_periods], 
-        M_PILE_TO_LINE[ps,p,t] <= (B_PILE_RECLAIMING[ps,p,t]) * m_line_demand[k_position_line[ps],t]
+        M_PILE_TO_LINE[ps,p,t] <= B_PILE_ALL_RECLAIMING[ps,p,t] * m_line_demand[k_position_line[ps],t]
     )
 
     # Min size for piles that start RECLAIMING
@@ -64,6 +63,7 @@ function add_material_flow_constraints!(model::Model, data::Data)
 
     # ------ Pile output flow
 
+    # Demand satisfaction constraint with a slack variable
     @variable(model, M_DEMAND_SLACK[d in s_lines, t in s_periods] >= 0)
     @constraint(model, [d in s_lines, t in s_periods],
         M_TO_LINE[d,t] == m_line_demand[d,t] - M_DEMAND_SLACK[d,t]
@@ -74,24 +74,18 @@ function add_material_flow_constraints!(model::Model, data::Data)
 
     # For each line, only one of its Piles can be on each of the RECLAIMING states
     @constraint(model, [d in s_lines, t in s_periods], 
-        sum(B_PILE_CONTINUE_RECLAIMING[ps,p,t] for ps in s_line_positions[d], p in s_piles[ps]) <= 1
+        sum(B_PILE_RECLAIMING[ps,p,t] for ps in s_line_positions[d], p in s_piles[ps]) <= 1
     )
     @constraint(model, [d in s_lines, t in s_periods], 
         sum(B_PILE_END_RECLAIMING[ps,p,t] for ps in s_line_positions[d], p in s_piles[ps]) <= 1
     )
-    @constraint(model, [d in s_lines, t in s_periods], 
-        sum(B_PILE_START_RECLAIMING[ps,p,t] for ps in s_line_positions[d], p in s_piles[ps]) <= 1
+    
+    # Piles can become END_RECLAIMING is mass in pile is zero
+    @constraint(model, [ps in s_positions, p in s_piles[ps]], 
+        M_IN_PILE[ps,p,s_periods[end]] <= data.m_position_max[ps] * (1 - B_PILE_END_RECLAIMING[ps,p,s_periods[end]])
     )
 
-    # For each line, we cannot have CONTINUE and (START | END) piles but we can have a START and END piles
-    @constraint(model, [d in s_lines, t in s_periods], 
-        sum(B_PILE_CONTINUE_RECLAIMING[ps,p,t] + B_PILE_START_RECLAIMING[ps,p,t] for ps in s_line_positions[d], p in s_piles[ps]) <= 1
-    )
-    @constraint(model, [d in s_lines, t in s_periods], 
-        sum(B_PILE_CONTINUE_RECLAIMING[ps,p,t] + B_PILE_END_RECLAIMING[ps,p,t] for ps in s_line_positions[d], p in s_piles[ps]) <= 1
-    )
-
-    # Mass INPUT in pile must be grater than mass OUTPUt
+    # Mass INPUT in pile must be grater than mass OUTPUT
     @constraint(model, [ps in s_positions, p in s_piles[ps]],
         M_PILE_OUTPUT[ps,p] <=  M_PILE_INPUT[ps,p]
     )
