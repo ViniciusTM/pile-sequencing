@@ -1,7 +1,7 @@
 function add_variables!(model::Model, data::Data)
 
     @unpack s_compounds, s_piles, s_lines, s_line_positions, s_positions, s_periods, s_trains, s_train_window = data
-    @unpack m_train, p_local_quality, p_train_quality, m_line_demand, k_position_line, d_setup_to_recaiming = data
+    @unpack m_train, p_local_quality, p_train_quality, m_line_demand, k_position_line, d_quality_assertion_setup = data
 
     # --- Material flow to pile
 

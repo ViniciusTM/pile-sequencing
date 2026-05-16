@@ -120,13 +120,14 @@ period** before the position can start building the next pile (for
 equipment repositioning or maintenance).
 
 **Sub-day transitions.** Both the quality assay wait and the setup
-period are typically shorter than a full day (around 6–12 hours). This
-creates a modeling challenge: if a pile finishes building early in the
-day, it should ideally be able to start reclaiming later that same day
-(with reduced capacity). Similarly, if a pile is fully consumed in the
-morning, the next pile could start building that afternoon. Capturing
-these sub-day dynamics without exploding the model into hourly periods
-is an open challenge.
+period are typically shorter than a full day (around 6–12 hours). The
+model now supports same-day transitions: if a pile finishes building
+early in the day, it can start reclaiming later that same day after
+the quality assertion period. This is achieved through an intermediate
+`END_BUILDING` state and timing constraints that ensure the total
+duration of building, quality assertion, and reclaiming does not exceed
+24 hours per day. The setup time (quality assertion duration) is
+parameterized per position via `d_quality_assertion_setup`.
 
 Several rules follow from this structure:
 

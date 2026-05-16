@@ -23,6 +23,7 @@ This document describes the mixed-integer linear programming (MILP) formulation 
 | $\underline{M}_{ps}$ | Minimum pile mass (operational floor) at position $ps$ |
 | $\overline{M}_{ps}$ | Maximum pile capacity at position $ps$ |
 | $\text{cap}_{ps}$ | Maximum daily input rate at position $ps$ |
+| $\tau_{ps}^{\text{setup}}$ | Setup time (hours) for quality assertion at position $ps$ |
 
 ### Demand and Quality
 | Symbol | Description |
@@ -55,10 +56,17 @@ This document describes the mixed-integer linear programming (MILP) formulation 
 |----------|-------------|
 | $\beta_{ps,p,t}^{\text{empty}}$ | Pile is empty, awaiting material |
 | $\beta_{ps,p,t}^{\text{build}}$ | Pile is being built (receiving material) |
-| $\beta_{ps,p,t}^{\text{start}}$ | First day of reclaiming |
-| $\beta_{ps,p,t}^{\text{cont}}$ | Continuing to reclaim |
-| $\beta_{ps,p,t}^{\text{end}}$ | Last day of reclaiming |
+| $\beta_{ps,p,t}^{\text{end-build}}$ | Pile finishing building (can coexist with reclaiming for same-day transition) |
+| $\beta_{ps,p,t}^{\text{reclaim}}$ | Pile is being reclaimed |
+| $\beta_{ps,p,t}^{\text{end-reclaim}}$ | Last day of reclaiming |
 | $\beta_{ps,p,t}^{\text{done}}$ | Pile fully consumed |
+
+### Duration Variables
+| Variable | Domain | Description |
+|----------|--------|-------------|
+| $D_{ps,t}^{\text{build}}$ | $\geq 0$ | Hours spent building at position $ps$ on day $t$ |
+| $D_{ps,t}^{\text{quality}}$ | $\geq 0$ | Hours spent in quality assertion at position $ps$ on day $t$ |
+| $D_{ps,t}^{\text{reclaim}}$ | (expr) | Hours spent reclaiming at position $ps$ on day $t$ |
 
 ### Derived Expressions
 | Expression | Definition |
@@ -66,8 +74,10 @@ This document describes the mixed-integer linear programming (MILP) formulation 
 | $M_{ps,p,t}^{\text{train}}$ | $\sum_{i: t \in \mathcal{W}_i} b_{i,ps,p,t} \cdot m_i$ |
 | $M_{ps,p,t}^{\text{in}}$ | $x_{ps,p,t}^{\text{local}} + M_{ps,p,t}^{\text{train}}$ |
 | $M_{ps,p}^{\text{total}}$ | $\sum_{t} M_{ps,p,t}^{\text{in}}$ |
-| $\beta_{ps,p,t}^{\text{reclaim}}$ | $\beta_{ps,p,t}^{\text{start}} + \beta_{ps,p,t}^{\text{cont}} + \beta_{ps,p,t}^{\text{end}}$ |
+| $\beta_{ps,p,t}^{\text{all-build}}$ | $\beta_{ps,p,t}^{\text{build}} + \beta_{ps,p,t}^{\text{end-build}}$ |
+| $\beta_{ps,p,t}^{\text{all-reclaim}}$ | $\beta_{ps,p,t}^{\text{reclaim}} + \beta_{ps,p,t}^{\text{end-reclaim}}$ |
 | $Q_{ps,p,c}$ | $\sum_t \left( x_{ps,p,t}^{\text{local}} \cdot \frac{q_{c,t}^{\text{local}}}{100} + \sum_{i: t \in \mathcal{W}_i} b_{i,ps,p,t} \cdot m_i \cdot \frac{q_{i,c}^{\text{train}}}{100} \right)$ |
+| $D_{ps,t}^{\text{reclaim}}$ | $(M_{ps,t}^{\text{out}} / d_{\text{line}_{ps},t}) \cdot 24$ (derived from reclaimed mass) |
 
 ## Objective Function
 
@@ -79,11 +89,15 @@ $$\min \sum_{\ell \in \mathcal{L}} \sum_{t \in \mathcal{T}} s_{\ell,t}$$
 
 ### Pile Lifecycle (State Machine)
 
-Each pile must be in exactly one state at any time:
-$$\beta_{ps,p,t}^{\text{empty}} + \beta_{ps,p,t}^{\text{build}} + \beta_{ps,p,t}^{\text{reclaim}} + \beta_{ps,p,t}^{\text{done}} = 1 \quad \forall ps, p, t$$
+Each pile must be in exactly one of the main states at any time (excluding END_BUILDING which can coexist with RECLAIMING for same-day transitions):
+$$\beta_{ps,p,t}^{\text{empty}} + \beta_{ps,p,t}^{\text{build}} + \beta_{ps,p,t}^{\text{reclaim}} + \beta_{ps,p,t}^{\text{end-reclaim}} + \beta_{ps,p,t}^{\text{done}} = 1 \quad \forall ps, p, t$$
+
+BUILDING and END_BUILDING are mutually exclusive:
+$$\beta_{ps,p,t}^{\text{build}} + \beta_{ps,p,t}^{\text{end-build}} \leq 1 \quad \forall ps, p, t$$
 
 **Initial state:** Piles start either empty or building:
 $$\beta_{ps,p,1}^{\text{empty}} + \beta_{ps,p,1}^{\text{build}} = 1 \quad \forall ps, p$$
+$$\beta_{ps,p,1}^{\text{end-build}} = 0 \quad \forall ps, p$$
 
 **State transitions:** Each state can only transition to specific next states. These are enforced by the following constraints for $t > 1$:
 
@@ -93,17 +107,17 @@ $$\beta_{ps,p,t}^{\text{empty}} \leq \beta_{ps,p,t-1}^{\text{empty}}$$
 BUILDING can come from EMPTY or stay BUILDING:
 $$\beta_{ps,p,t}^{\text{build}} \leq \beta_{ps,p,t-1}^{\text{build}} + \beta_{ps,p,t-1}^{\text{empty}}$$
 
-START_RECLAIMING can only come from BUILDING (single-day state):
-$$\beta_{ps,p,t}^{\text{start}} \leq \beta_{ps,p,t-1}^{\text{build}}$$
+END_BUILDING is a transient state that can only come from BUILDING:
+$$\beta_{ps,p,t}^{\text{end-build}} \leq \beta_{ps,p,t-1}^{\text{build}}$$
 
-CONTINUE_RECLAIMING can come from START or stay CONTINUE:
-$$\beta_{ps,p,t}^{\text{cont}} \leq \beta_{ps,p,t-1}^{\text{start}} + \beta_{ps,p,t-1}^{\text{cont}}$$
+RECLAIMING can come from RECLAIMING, END_BUILDING (previous day), or **END_BUILDING (same day)** for same-day transitions:
+$$\beta_{ps,p,t}^{\text{reclaim}} \leq \beta_{ps,p,t-1}^{\text{reclaim}} + \beta_{ps,p,t-1}^{\text{end-build}} + \beta_{ps,p,t}^{\text{end-build}}$$
 
-END_RECLAIMING can come from START or CONTINUE (single-day state):
-$$\beta_{ps,p,t}^{\text{end}} \leq \beta_{ps,p,t-1}^{\text{start}} + \beta_{ps,p,t-1}^{\text{cont}}$$
+END_RECLAIMING can come from RECLAIMING or END_BUILDING (previous day):
+$$\beta_{ps,p,t}^{\text{end-reclaim}} \leq \beta_{ps,p,t-1}^{\text{reclaim}} + \beta_{ps,p,t-1}^{\text{end-build}}$$
 
-DONE can come from END or stay DONE:
-$$\beta_{ps,p,t}^{\text{done}} \leq \beta_{ps,p,t-1}^{\text{done}} + \beta_{ps,p,t-1}^{\text{end}}$$
+DONE can come from END_RECLAIMING or stay DONE:
+$$\beta_{ps,p,t}^{\text{done}} \leq \beta_{ps,p,t-1}^{\text{done}} + \beta_{ps,p,t-1}^{\text{end-reclaim}}$$
 
 **Pile ordering:** Pile $p+1$ can only start building after pile $p$ is done:
 $$\beta_{ps,p+1,t}^{\text{build}} \leq \beta_{ps,p,t}^{\text{done}} \quad \forall ps, p, t > 1$$
@@ -149,6 +163,18 @@ $$Q_{ps,p,c} \geq M_{ps,p}^{\text{total}} \cdot \frac{\underline{q}_{\text{line}
 **Maximum quality:**
 $$Q_{ps,p,c} \leq M_{ps,p}^{\text{total}} \cdot \frac{\overline{q}_{\text{line}_{ps},c}}{100} \quad \forall ps, p, c$$
 
+### Timing Constraints (Same-Day Transitions)
+
+**Daily duration limit:** The sum of building, quality assertion, and reclaiming time cannot exceed 24 hours:
+$$D_{ps,t}^{\text{build}} + D_{ps,t}^{\text{quality}} + D_{ps,t}^{\text{reclaim}} \leq 24 \quad \forall ps, t$$
+
+**Building duration based on input rates:** Building time is bounded by the slower of local arrival rate or input capacity:
+$$D_{ps,t}^{\text{build}} \geq \frac{M_{ps,t}^{\text{local}}}{a_t^{\text{local}}} \cdot 24 \quad \forall ps, t$$
+$$D_{ps,t}^{\text{build}} \geq \frac{M_{ps,t}^{\text{in}}}{\text{cap}_{ps}} \cdot 24 \quad \forall ps, t$$
+
+**Quality assertion after building:** When a position finishes building (END_BUILDING), quality assertion must occur, potentially spanning two days:
+$$D_{ps,t}^{\text{quality}} + D_{ps,t+1}^{\text{quality}} \geq \tau_{ps}^{\text{setup}} \cdot \sum_p \beta_{ps,p,t}^{\text{end-build}} \quad \forall ps, t < T$$
+
 ## Model Characteristics
 
 | Aspect | Value |
@@ -169,6 +195,5 @@ $$Q_{ps,p,c} \leq M_{ps,p}^{\text{total}} \cdot \frac{\overline{q}_{\text{line}_
 
 The following features described in the problem document are **not yet implemented**:
 
-- **Sub-day transitions:** The model uses daily granularity. If a pile finishes building or reclaiming, the next phase can only start the following day. In reality, quality assay and setup times are around 6–12 hours, so same-day transitions with reduced capacity should be possible.
 - **Line safety stock:** No constraint enforces minimum inventory per line.
 - **Shared equipment:** Input/output capacity is per-position; shared stacker/reclaimer constraints are not modeled.

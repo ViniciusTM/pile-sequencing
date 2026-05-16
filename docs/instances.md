@@ -23,6 +23,7 @@ All instance data is encapsulated in the `Data` struct defined in `src/data.jl`.
 | `m_position_min` | `Dict{Symbol,Float64}` | Operational floor (minimum pile mass) per position |
 | `m_position_max` | `Dict{Symbol,Float64}` | Maximum pile capacity per position |
 | `m_input_capacity` | `Dict{Symbol,Float64}` | Maximum daily input rate per position |
+| `d_quality_assertion_setup` | `Dict{Symbol,Int}` | Setup time in hours for quality assertion before reclaiming |
 
 ### Pelletizing Lines (Demand Side)
 
@@ -77,6 +78,7 @@ function my_instance()::Data
     m_position_min = Dict(:PS1 => 20.0, :PS2 => 20.0, :PS3 => 20.0)
     m_position_max = Dict(:PS1 => 26.0, :PS2 => 26.0, :PS3 => 26.0)
     m_input_capacity = Dict(:PS1 => 7.0, :PS2 => 7.0, :PS3 => 7.0)
+    d_quality_assertion_setup = Dict(:PS1 => 8, :PS2 => 8, :PS3 => 8)  # 8 hours for quality assertion
 
     # Single BF line with demand starting day 5
     s_lines = [:BF1]
@@ -121,6 +123,7 @@ function my_instance()::Data
         m_position_min=m_position_min,
         m_position_max=m_position_max,
         m_input_capacity=m_input_capacity,
+        d_quality_assertion_setup=d_quality_assertion_setup,
         s_lines=s_lines,
         m_line_demand=m_line_demand,
         p_line_quality_min=p_line_quality_min,

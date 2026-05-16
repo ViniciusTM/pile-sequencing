@@ -12,7 +12,7 @@ function toy_instance()::Data
     m_position_min = Dict(:PS1 => 20.0, :PS2 => 20.0, :PS3 => 20.0)
     m_position_max = Dict(:PS1 => 26.0, :PS2 => 26.0, :PS3 => 26.0)
     m_input_capacity = Dict(:PS1 => 7.0, :PS2 => 7.0, :PS3 => 7.0)
-    d_setup_to_recaiming = Dict(:PS1 => 8, :PS2 => 8, :PS3 => 8)
+    d_quality_assertion_setup = Dict(:PS1 => 8, :PS2 => 8, :PS3 => 8)
 
     s_lines = [:BF1]
     m_line_demand = Dict(
@@ -75,7 +75,7 @@ function toy_instance()::Data
         k_position_line=k_position_line,
         m_position_min=m_position_min,
         m_position_max=m_position_max,
-        d_setup_to_recaiming=d_setup_to_recaiming,
+        d_quality_assertion_setup=d_quality_assertion_setup,
         m_input_capacity=m_input_capacity,
         s_lines=s_lines,
         m_line_demand=m_line_demand,

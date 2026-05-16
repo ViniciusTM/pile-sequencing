@@ -54,6 +54,7 @@ pile-sequencing/
 │   ├── pile_lifecycle.jl     # State machine constraints
 │   ├── material_flow.jl      # Flow conservation and capacity
 │   ├── quality.jl            # Chemical specification constraints
+│   ├── timing.jl             # Duration and setup time constraints
 │   ├── objective.jl          # Objective function
 │   └── model.jl              # Model builder and solver
 └── instances/
@@ -69,7 +70,7 @@ pile-sequencing/
 ## Roadmap
 
 **Model enhancements:**
-- [ ] Sub-day transitions (quality assay ~6-12h, setup time ~6-12h, same-day phase changes with reduced capacity)
+- [x] Sub-day transitions (quality assay ~6-12h, setup time ~6-12h, same-day phase changes with reduced capacity)
 - [ ] Line-level safety stock constraints
 - [ ] Shared equipment capacity constraints (stacker/reclaimer per yard)
 - [ ] Cost-based objective function
