@@ -18,6 +18,7 @@ function solve!(model::Model, data::Data)
     if has_values(model)
         println("FO: ", value(objective_function(model)))
         print_solution(model, data)
+        validate_solution(data, model)
     end
 
 end

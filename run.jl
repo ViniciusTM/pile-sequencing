@@ -12,6 +12,7 @@ include("src/material_flow.jl")
 include("src/quality.jl")
 include("src/timing.jl")
 include("src/objective.jl")
+include("src/validate.jl")
 include("src/model.jl")
 
 include("instances/toy_instance.jl")
